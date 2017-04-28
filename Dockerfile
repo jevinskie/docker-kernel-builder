@@ -1,5 +1,7 @@
-FROM ubuntu:xenial
+FROM ubuntu:latest
+
 MAINTAINER Manfred Touron (@moul)
+MAINTAINER Jevin Sweval (@jevinskie)
 
 
 # Install dependencies
@@ -7,40 +9,34 @@ RUN apt-get update               \
  && apt-get -y -q upgrade        \
  && apt-get -y -q install        \
     bc                           \
-    binutils-arm-linux-gnueabihf \
     build-essential              \
     ccache                       \
-    gcc-arm-linux-gnueabihf      \
-    gccgo-4.7-arm-linux-gnueabi  \
-    gcc-aarch64-linux-gnu        \
+    nano                         \
+    file                         \
+    gcc                          \
     git                          \
     libncurses-dev               \
     libssl-dev                   \
-    u-boot-tools                 \
     wget                         \
     xz-utils                     \
  && apt-get clean
 
-
-# Install DTC
-RUN wget http://ftp.fr.debian.org/debian/pool/main/d/device-tree-compiler/device-tree-compiler_1.4.0+dfsg-1_amd64.deb -O /tmp/dtc.deb \
- && dpkg -i /tmp/dtc.deb \
- && rm -f /tmp/dtc.deb
-
-
 # Fetch the kernel
-ENV KVER=stable              \
-    CCACHE_DIR=/ccache       \
+ENV CCACHE_DIR=/ccache       \
     SRC_DIR=/usr/src         \
-    DIST_DIR=/dist           \
     LINUX_DIR=/usr/src/linux \
-    LINUX_REPO_URL=git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git
-RUN mkdir -p ${SRC_DIR} ${CCACHE_DIR} ${DIST_DIR}  \
- && cd /usr/src                                    \
- && git clone ${LINUX_REPO_URL}                    \
- && ln -s ${SRC_DIR}/linux-${KVER} ${LINUX_DIR}
+    LINUX_REPO_URL=https://github.com/linuxkit/linux
+RUN mkdir -p ${SRC_DIR} ${CCACHE_DIR}   \
+ && cd /usr/src     \
+ && git clone --depth 1 -b v4.10.13-linuxkit ${LINUX_REPO_URL} ${LINUX_DIR} \
+ && cd ${LINUX_DIR} \
+ && git clone --depth 1 -b aufs4.10 https://github.com/sfjro/aufs4-standalone \
+ && git clone --depth 1 -b aufs4.1 https://github.com/ncopa/aufs-util \
+ && patch -p1 < aufs4-standalone/aufs4-kbuild.patch \
+ && patch -p1 < aufs4-standalone/aufs4-base.patch \
+ && patch -p1 < aufs4-standalone/aufs4-mmap.patch \
+ && cp -R aufs4-standalone/Documentation/* Documentation/ \
+ && cp -R aufs4-standalone/fs/* fs/ \
+ && cp aufs4-standalone/include/uapi/linux/aufs_type.h include/uapi/linux \
+ && sed -i'' -e 's/default m/default y/g' fs/nfs/Kconfig
 WORKDIR ${LINUX_DIR}
-
-
-# Update git tree
-RUN git fetch --tags
